@@ -62,6 +62,12 @@ const CALLER_KEY = process.env.CODEX_ROUTER_CALLER_KEY;
 const QUIET =
   process.env.CODEX_ROUTER_QUIET === "1" || process.env.KIMI_PROXY_QUIET === "1";
 const ERROR_STATUS_DURATION_MS = 8_000;
+const NATIVE_IMAGE_PATHS = new Set([
+  "/images/edits",
+  "/images/generations",
+  "/v1/images/edits",
+  "/v1/images/generations",
+]);
 
 let requestSequence = 0;
 const activeRequests = new Map();
@@ -652,6 +658,68 @@ async function handleResponses(request, response, requestUrl) {
   }
 }
 
+async function handleNativeImage(request, response, requestUrl) {
+  const startedAt = Date.now();
+  const activity = beginRequestActivity();
+  let clientGone = false;
+  try {
+    if (!requireCodexTransport(request, response)) return;
+    const encoded = await readRequestBody(request);
+    const body = decodeBody(encoded, request.headers["content-encoding"]);
+    const payload = parseBody(body);
+    const requestedModel =
+      typeof payload.model === "string" ? payload.model : "gpt-image-2";
+    activity.setRoute({
+      provider: "openai",
+      model: requestedModel,
+      sessionName: sessionNameFromHeaders(request.headers),
+    });
+
+    const controller = new AbortController();
+    request.once("aborted", () => {
+      clientGone = true;
+      controller.abort();
+    });
+    response.once("close", () => {
+      if (!response.writableEnded) {
+        clientGone = true;
+        controller.abort();
+      }
+    });
+
+    const upstream = await fetch(
+      nativeTarget(requestUrl.pathname, requestUrl.search),
+      {
+        method: "POST",
+        headers: nativeHeaders(request),
+        body,
+        signal: controller.signal,
+      },
+    );
+    await pipeResponse(upstream, response, HOP_BY_HOP_HEADERS);
+    recordUsageEvent({
+      model: requestedModel,
+      provider: "openai",
+      status: upstream.status,
+      durationMs: Date.now() - startedAt,
+    });
+    if (!QUIET) {
+      console.error(
+        `[codex-router] model=${requestedModel} provider=openai status=${upstream.status}`,
+      );
+    }
+  } catch (error) {
+    if (clientGone) {
+      activity.finish(0);
+      return;
+    }
+    activity.finish(500);
+    throw error;
+  } finally {
+    activity.finish(response.statusCode);
+  }
+}
+
 async function handleRequest(request, response) {
   const requestUrl = new URL(
     request.url || "/",
@@ -704,6 +772,10 @@ async function handleRequest(request, response) {
     )
   ) {
     await handleResponses(request, response, requestUrl);
+    return;
+  }
+  if (request.method === "POST" && NATIVE_IMAGE_PATHS.has(requestUrl.pathname)) {
+    await handleNativeImage(request, response, requestUrl);
     return;
   }
   writeJson(response, 404, {

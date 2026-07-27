@@ -549,6 +549,87 @@ test("router preserves native auth and isolates every external route", async () 
   }
 });
 
+test("router sends standalone image requests only to the native OpenAI backend", async () => {
+  const nativeRequests = [];
+  const native = await mockServer(async (request, response) => {
+    nativeRequests.push({
+      url: request.url,
+      headers: request.headers,
+      body: await bodyJson(request),
+    });
+    json(response, 200, { data: [{ b64_json: "test-image" }] });
+  });
+  const routerPort = await openPort();
+  const router = run("router.mjs", {
+    CODEX_ROUTER_PORT: String(routerPort),
+    CODEX_NATIVE_BASE_URL: `http://127.0.0.1:${native.port}/backend-api/codex`,
+    CODEX_ROUTER_QUIET: "1",
+  });
+  const headers = {
+    Authorization: "Bearer CODEX_CALLER_SECRET",
+    "ChatGPT-Account-Id": "account-secret",
+    "X-Codex-Installation-Id": "installation-secret",
+    "X-Private-Header": "must-not-forward",
+    "Content-Type": "application/json",
+  };
+
+  try {
+    await waitFor(`${routerBase(routerPort)}/models`, router);
+    const generationBody = zstdCompressSync(
+      Buffer.from(
+        JSON.stringify({
+          model: "gpt-image-2",
+          prompt: "generate a game world",
+          size: "auto",
+        }),
+      ),
+    );
+    const generation = await fetch(`${routerBase(routerPort)}/images/generations`, {
+      method: "POST",
+      headers: { ...headers, "Content-Encoding": "zstd" },
+      body: generationBody,
+    });
+    assert.equal(generation.status, 200);
+
+    const edit = await fetch(`${routerBase(routerPort)}/images/edits`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: "gpt-image-2",
+        prompt: "add a game controller",
+        images: [{ image_url: "data:image/png;base64,dGVzdA==" }],
+      }),
+    });
+    assert.equal(edit.status, 200);
+
+    assert.deepEqual(
+      nativeRequests.map((request) => request.url),
+      [
+        "/backend-api/codex/images/generations",
+        "/backend-api/codex/images/edits",
+      ],
+    );
+    assert.equal(nativeRequests[0].headers.authorization, "Bearer CODEX_CALLER_SECRET");
+    assert.equal(nativeRequests[0].headers["chatgpt-account-id"], "account-secret");
+    assert.equal(nativeRequests[0].headers["x-codex-installation-id"], "installation-secret");
+    assert.equal(nativeRequests[0].headers["x-private-header"], undefined);
+    assert.equal(nativeRequests[0].headers["content-encoding"], undefined);
+    assert.equal(nativeRequests[0].body.model, "gpt-image-2");
+    assert.equal(nativeRequests[1].body.images[0].image_url, "data:image/png;base64,dGVzdA==");
+
+    const unsupported = await fetch(`${routerBase(routerPort)}/audio/speech`, {
+      method: "POST",
+      headers,
+      body: "{}",
+    });
+    assert.equal(unsupported.status, 404);
+    assert.equal(nativeRequests.length, 2);
+  } finally {
+    await stopChild(router);
+    await closeServer(native.server);
+  }
+});
+
 test("router synthesizes routed compaction and safely replays it to native models", async () => {
   const gatewayRequests = [];
   const gateway = await mockServer(async (request, response) => {

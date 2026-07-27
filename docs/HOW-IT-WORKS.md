@@ -171,5 +171,9 @@ opaque encrypted compaction payload, so the router asks the selected external
 model for a continuation summary and wraps it in a router-owned `kcr1:` payload.
 On replay, it converts that payload back to a plain continuation message.
 
+Standalone `/images/generations` and `/images/edits` requests always pass through
+to the native OpenAI Codex backend with filtered Codex authentication headers.
+They are never sent to an external model provider.
+
 Commands, permissions, MCP tools, skills, and task state remain in Codex. Only
 model inference and external-model compaction are routed.
