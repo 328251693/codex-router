@@ -389,6 +389,11 @@ async function setLoginFreeModel(slug) {
   process.stdout.write(result.stdout);
 }
 
+async function updateAndVerifyCodex() {
+  const { runCodexMaintenance } = await import("./codex-maintenance.mjs");
+  process.stdout.write(`${JSON.stringify(runCodexMaintenance())}\n`);
+}
+
 // --- dispatch ---------------------------------------------------------------
 
 if (args.includes("--probe")) {
@@ -419,6 +424,8 @@ if (args.includes("--probe")) {
   await setLoginFreeMode(args[1]);
 } else if (args[0] === "model-set") {
   await setLoginFreeModel(args[1]);
+} else if (args[0] === "maintenance") {
+  await updateAndVerifyCodex();
 } else {
   printOverview(args.includes("--json"));
 }

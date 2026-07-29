@@ -92,6 +92,8 @@ final class RouterStore: ObservableObject {
   @Published private(set) var providerUsageError: String?
   @Published private(set) var providerSetup: [String: ProviderSetupState] = [:]
   @Published private(set) var providerOperation: String?
+  @Published private(set) var maintenanceMessage: String?
+  @Published private(set) var maintenanceSucceeded = false
   @Published private(set) var islandMode: IslandMode
 
   private var polling = false
@@ -125,6 +127,10 @@ final class RouterStore: ObservableObject {
 
   var loginFree: Bool {
     snapshot.targets["codex"]?.loginFree == true
+  }
+
+  var maintenanceRunning: Bool {
+    providerOperation == "maintenance"
   }
 
   private static let providerShortNames: [String: String] = [
@@ -627,6 +633,26 @@ final class RouterStore: ObservableObject {
         : "Provider hidden. Restart Codex to refresh its model picker."
     } catch {
       message = error.localizedDescription
+      await refresh()
+    }
+  }
+
+  func updateAndVerify() async {
+    guard providerOperation == nil else { return }
+    providerOperation = "maintenance"
+    maintenanceMessage = "Running update and doctor…"
+    maintenanceSucceeded = false
+    defer { providerOperation = nil }
+    do {
+      _ = try await runControl(arguments: ["maintenance"])
+      await refresh()
+      await refreshAccountUsage()
+      await refreshProviderUsage()
+      await refreshProviderSetup()
+      maintenanceSucceeded = true
+      maintenanceMessage = "Verified. Restart Codex to load updated models and agents."
+    } catch {
+      maintenanceMessage = error.localizedDescription
       await refresh()
     }
   }
@@ -1264,6 +1290,11 @@ private struct TrayView: View {
           ),
           isDisabled: store.providerOperation != nil
         )
+        sectionLabel(
+          "Maintenance",
+          detail: store.maintenanceRunning ? "Updating & checking…" : "Update + doctor"
+        )
+        maintenanceRow
         sectionLabel("Providers", detail: store.providerOperation == nil ? "Auto-saved" : "Applying…")
         VStack(spacing: 0) {
           ForEach(providers, id: \.id) { provider in
@@ -1327,6 +1358,51 @@ private struct TrayView: View {
         .disabled(isDisabled)
     }
     .padding(.vertical, 1)
+  }
+
+  private var maintenanceRow: some View {
+    HStack(spacing: 12) {
+      VStack(alignment: .leading, spacing: 3) {
+        Text("Router installation")
+          .font(.system(size: 12, weight: .medium))
+        Text(store.maintenanceMessage ?? "Apply pulled changes and verify routed model agents")
+          .font(.system(size: 9))
+          .foregroundStyle(
+            store.maintenanceMessage == nil
+              ? routerMuted
+              : store.maintenanceSucceeded
+                ? routerMint
+                : store.maintenanceRunning
+                  ? routerAccent
+                  : routerRed
+          )
+          .lineLimit(2)
+      }
+      Spacer(minLength: 8)
+      if store.maintenanceRunning {
+        ProgressView()
+          .controlSize(.small)
+          .tint(routerAccent)
+          .frame(width: 94)
+          .accessibilityLabel("Updating and verifying Codex Router")
+      } else {
+        Button {
+          Task { await store.updateAndVerify() }
+        } label: {
+          Label("Update & Verify", systemImage: "arrow.triangle.2.circlepath")
+        }
+        .buttonStyle(AccentButtonStyle())
+        .disabled(store.providerOperation != nil)
+        .opacity(store.providerOperation == nil ? 1 : 0.5)
+        .help("Apply the checked-out router revision, then run the Codex doctor")
+        .accessibilityLabel("Update and verify Codex Router")
+      }
+    }
+    .padding(10)
+    .background(
+      Color.primary.opacity(0.045),
+      in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+    )
   }
 
   private var emptyState: some View {

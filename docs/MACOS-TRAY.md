@@ -110,6 +110,12 @@ adding an API key updates Codex immediately; the provider row shows progress
 while the router configuration and service are refreshed. If applying fails,
 the tray restores the previous provider selection and shows the error.
 
+The **Update & Verify** maintenance button applies the checked-out `main`
+revision to the per-user Codex installation, then runs the Codex doctor. It
+shows progress while both commands run and reports whether routed model agents
+and the rest of the installation passed verification. Restart Codex afterward
+to load updated models and custom agents.
+
 The **Use without OpenAI login** switch changes new Codex sessions to the
 managed custom router provider. At least one external provider must be connected
 and enabled. After applying the change, the tray gracefully quits and reopens
