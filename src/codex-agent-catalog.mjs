@@ -1,7 +1,16 @@
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
-import { protectPrivateFile } from "./file-security.mjs";
+import {
+  privateFileIsProtected,
+  protectPrivateFile,
+} from "./file-security.mjs";
 import { CODEX_AGENTS_DIR } from "./paths.mjs";
 
 function safeIdentifier(value, separator) {
@@ -54,4 +63,42 @@ export function syncRoutedCodexAgents(models, agentsDir = CODEX_AGENTS_DIR) {
     written.push({ model: model.slug, agent: definition.agentName, path: target });
   }
   return written;
+}
+
+export function routedCodexAgentStatus(models, agentsDir = CODEX_AGENTS_DIR) {
+  const status = {
+    expected: models.length,
+    current: 0,
+    missing: [],
+    stale: [],
+    unprotected: [],
+  };
+  for (const model of models) {
+    const definition = routedAgentDefinition(model);
+    const target = path.join(agentsDir, definition.fileName);
+    if (!existsSync(target)) {
+      status.missing.push(model.slug);
+      continue;
+    }
+    let contents;
+    try {
+      contents = readFileSync(target, "utf8");
+    } catch {
+      status.stale.push(model.slug);
+      continue;
+    }
+    if (contents !== definition.contents) {
+      status.stale.push(model.slug);
+      continue;
+    }
+    if (!privateFileIsProtected(target)) {
+      status.unprotected.push(model.slug);
+      continue;
+    }
+    status.current += 1;
+  }
+  return {
+    ...status,
+    ok: status.expected > 0 && status.current === status.expected,
+  };
 }

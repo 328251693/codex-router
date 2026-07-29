@@ -395,7 +395,9 @@ For a managed Git checkout:
 
 Updates require a clean `main` checkout and a recognized repository origin.
 The previous revision is retained as a local rollback ref, and a failed install
-restores the previous source revision. If both targets are installed, run each
+restores the previous source revision. If you already ran `git pull` manually,
+run the update command anyway; it applies the pulled revision when the install
+manifest is older. If both targets are installed, run each
 target's `doctor --fix` after an update or rollback so both generated configs
 and services match the shared source revision.
 

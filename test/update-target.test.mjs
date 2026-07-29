@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { currentCheckoutInstaller } from "../src/update.mjs";
+import {
+  currentCheckoutInstaller,
+  installationNeedsRefresh,
+} from "../src/update.mjs";
 
 test("checkout updates preserve the selected app target on every platform", () => {
   const windowsCodex = currentCheckoutInstaller("win32", "codex");
@@ -14,4 +17,16 @@ test("checkout updates preserve the selected app target on every platform", () =
   const posixCursor = currentCheckoutInstaller("darwin", "cursor");
   assert.match(posixCursor.command, /bin[\\/]install$/);
   assert.deepEqual(posixCursor.args, []);
+});
+
+test("an update reinstalls a revision pulled outside the updater", () => {
+  assert.equal(installationNeedsRefresh(undefined, "new-revision"), true);
+  assert.equal(
+    installationNeedsRefresh({ current: { commit: "old-revision" } }, "new-revision"),
+    true,
+  );
+  assert.equal(
+    installationNeedsRefresh({ current: { commit: "new-revision" } }, "new-revision"),
+    false,
+  );
 });

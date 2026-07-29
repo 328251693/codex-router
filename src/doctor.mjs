@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { validCallerSecret } from "./caller-auth.mjs";
 import { findCodexBinary } from "./codex-binary.mjs";
+import { routedCodexAgentStatus } from "./codex-agent-catalog.mjs";
 import { privateFileIsProtected } from "./file-security.mjs";
 import { grokCliPreflight } from "./grok-cli.mjs";
 import { detectLegacyInstallations } from "./legacy-migration.mjs";
@@ -13,6 +14,7 @@ import { kimiOAuthStatus } from "./oauth-status.mjs";
 import { waitForRouterHealth } from "./router-health.mjs";
 import {
   CALLER_SECRET_PATH,
+  CODEX_AGENTS_DIR,
   CONFIG_PATH,
   INTERNAL_SECRET_PATH,
   LITELLM_CONFIG_PATH,
@@ -150,10 +152,12 @@ add(
 );
 
 let selection = { providers: [], explicit: false };
+let requiredRoutedModels = [];
 let requiredModels = new Set();
 try {
   selection = providerSelectionStatus();
-  requiredModels = new Set(selectedConfiguredListedModels().map((model) => model.slug));
+  requiredRoutedModels = selectedConfiguredListedModels();
+  requiredModels = new Set(requiredRoutedModels.map((model) => model.slug));
   add(
     selection.providers.length ? "ok" : "fail",
     "Enabled providers",
@@ -186,6 +190,15 @@ add(
   "Merged catalog",
   catalogOk ? `${requiredModels.size} routed models` : MERGED_CATALOG_PATH,
   "Run ./bin/refresh-catalog, or ./bin/doctor --fix if files are missing.",
+);
+const agentStatus = routedCodexAgentStatus(requiredRoutedModels);
+add(
+  agentStatus.ok ? "ok" : "fail",
+  "Routed model agents",
+  agentStatus.ok
+    ? `${agentStatus.current} current definitions in ${CODEX_AGENTS_DIR}`
+    : `${agentStatus.current} of ${agentStatus.expected} current definitions in ${CODEX_AGENTS_DIR}`,
+  "Run ./bin/doctor --fix, then fully quit Codex, reopen it, and create a new task.",
 );
 add(
   existsSync(LITELLM_CONFIG_PATH) ? "ok" : "fail",

@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   routedAgentDefinition,
+  routedCodexAgentStatus,
   syncRoutedCodexAgents,
 } from "../src/codex-agent-catalog.mjs";
 
@@ -39,6 +40,26 @@ test("agent sync writes one private definition for every routed model", () => {
   );
   const kimiFile = path.join(agentsDir, "router-model-kimi-oauth-k3.toml");
   assert.match(readFileSync(kimiFile, "utf8"), /name = "router_kimi_oauth_k3"/);
+  assert.deepEqual(routedCodexAgentStatus([kimi], agentsDir), {
+    expected: 1,
+    current: 1,
+    missing: [],
+    stale: [],
+    unprotected: [],
+    ok: true,
+  });
+});
+
+test("agent status reports definitions that have not been installed", () => {
+  const agentsDir = mkdtempSync(path.join(os.tmpdir(), "codex-router-agents-"));
+  assert.deepEqual(routedCodexAgentStatus([kimi], agentsDir), {
+    expected: 1,
+    current: 0,
+    missing: ["kimi-oauth/k3"],
+    stale: [],
+    unprotected: [],
+    ok: false,
+  });
 });
 
 test("agent definitions reject non-routed model slugs", () => {

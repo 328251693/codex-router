@@ -90,9 +90,19 @@ export function checkForUpdate() {
   return { current, available, updateAvailable: current !== available };
 }
 
+export function installationNeedsRefresh(manifest, revision) {
+  return manifest?.current?.commit !== revision;
+}
+
 export function updateCheckout() {
   const status = checkForUpdate();
-  if (!status.updateAvailable) return { ...status, updated: false };
+  if (!status.updateAvailable) {
+    if (!installationNeedsRefresh(readInstallManifest(), status.current)) {
+      return { ...status, updated: false, reinstalled: false };
+    }
+    installCurrentCheckout();
+    return { ...status, updated: false, reinstalled: true };
+  }
   let branch = git(["branch", "--show-current"]);
   if (!branch) {
     git(["switch", "main"], { inherit: true });
@@ -119,7 +129,7 @@ export function updateCheckout() {
       { cause: error },
     );
   }
-  return { ...status, updated: true };
+  return { ...status, updated: true, reinstalled: true };
 }
 
 export function rollbackCheckout() {

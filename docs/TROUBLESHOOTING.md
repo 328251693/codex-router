@@ -46,6 +46,26 @@ Inspect Codex's startup catalog directly:
 codex debug models
 ```
 
+## Routed model agents are missing
+
+Pulling `main` updates only the source checkout. Apply that revision to the
+per-user Codex installation and verify the generated custom agents:
+
+```sh
+./bin/model-router codex update
+./bin/model-router codex doctor
+```
+
+The doctor should report `OK` for `Routed model agents`. If it does not:
+
+```sh
+./bin/model-router codex doctor --fix
+```
+
+Then fully quit Codex, reopen it, and create a new task. The generated personal
+agent definitions are stored under `$CODEX_HOME/agents/` (normally
+`~/.codex/agents/`).
+
 The config root should contain exactly one `codex-router-managed` block with the
 loopback base URL on port 4102, a generated `/_codex-router/.../v1` path, and a catalog under
 `$CODEX_HOME/codex-router/merged-models.json`.
