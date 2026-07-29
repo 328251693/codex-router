@@ -59,7 +59,10 @@ edge during both idle and active sessions.
   quick and the longer ranges stay in the tray. Hover any mark for its date and
   exact token count. When the provider reports a quota reset, its local reset
   date and time appear beside the chart title. Usage refreshes every 30 seconds,
-  and the detailed view switches when a request uses a different provider.
+  and the detailed view switches when a new request uses a different provider.
+  A provider selected manually remains focused for the rest of the current
+  request so its usage can be inspected without activity polling overriding the
+  selection; automatic following resumes with the next request.
 - The Island status mark uses Thinking Orbs **Shaping** while idle,
   **Thinking** while generating, and **Solving** for errors. Starting retains
   its amber status dot, and the Error label remains explicit. The

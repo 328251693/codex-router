@@ -107,6 +107,7 @@ final class RouterStore: ObservableObject {
   private var hasResolvedInitialUsageProvider = false
   private var hasObservedActiveProvider = false
   private var manuallySelectedUsageProvider = false
+  private var latestObservedActivityRequestID: String?
   private var activityHealthFailureStartedAt: Date?
 
   init() {
@@ -732,6 +733,7 @@ final class RouterStore: ObservableObject {
         throw RouterError("Router health check failed.")
       }
       let health = try JSONDecoder().decode(RouterHealth.self, from: data)
+      let previousActivityState = activityState
       activityHealthFailureStartedAt = nil
       activityState = health.activity.state
       activeRequests = health.activity.active ?? []
@@ -743,8 +745,19 @@ final class RouterStore: ObservableObject {
       if health.activity.state == .generating,
          let provider = health.activity.provider {
         hasObservedActiveProvider = true
-        manuallySelectedUsageProvider = false
-        focusUsageProvider(provider)
+        if let requestID = activeRequests.last?.id {
+          if requestID != latestObservedActivityRequestID {
+            latestObservedActivityRequestID = requestID
+            manuallySelectedUsageProvider = false
+          }
+        } else if previousActivityState != .generating {
+          // Older router health payloads may not include active request IDs.
+          // Treat the transition into generating as the start of a new request.
+          manuallySelectedUsageProvider = false
+        }
+        if !manuallySelectedUsageProvider {
+          focusUsageProvider(provider)
+        }
       }
     } catch {
       recordActivityHealthFailure()
