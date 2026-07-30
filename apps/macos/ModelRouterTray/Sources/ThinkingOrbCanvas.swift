@@ -438,7 +438,10 @@ final class ThinkingOrbNSView: NSView {
   private var running = false
   private var mode: ThinkingOrbMode = .shaping
   var reduceMotion = false {
-    didSet { setNeedsDisplay(bounds) }
+    didSet {
+      guard reduceMotion != oldValue else { return }
+      setNeedsDisplay(bounds)
+    }
   }
 
   init(size: CGFloat = 18) {

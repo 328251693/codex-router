@@ -56,6 +56,7 @@ final class IslandWindowController {
   static let windowSize = CGSize(width: 720, height: 400)
 
   private let window: NSPanel
+  private let store: RouterStore
   private let display = IslandDisplayModel()
   private var globalMouseMonitor: Any?
   private var localMouseMonitor: Any?
@@ -64,6 +65,7 @@ final class IslandWindowController {
   private var trackingInstalled = false
 
   init(store: RouterStore) {
+    self.store = store
     window = NSPanel(
       contentRect: NSRect(origin: .zero, size: Self.windowSize),
       styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
@@ -77,15 +79,12 @@ final class IslandWindowController {
     window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
     window.isMovable = false
     window.hidesOnDeactivate = false
-    window.contentView = NSHostingView(
-      rootView: IslandOverlayView(store: store, display: display)
-        .frame(width: Self.windowSize.width, height: Self.windowSize.height, alignment: .top)
-        .preferredColorScheme(.dark)
-    )
+    window.contentView = nil
   }
 
   func setVisible(_ visible: Bool) {
     if visible {
+      installContentIfNeeded()
       reposition()
       window.orderFrontRegardless()
       if !trackingInstalled {
@@ -103,6 +102,9 @@ final class IslandWindowController {
       }
     } else {
       window.orderOut(nil)
+      window.contentView = nil
+      removeMouseTracking()
+      removeScreenObserver()
     }
   }
 
@@ -111,6 +113,30 @@ final class IslandWindowController {
     if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor) }
     if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
     initialTrackingTimer?.invalidate()
+  }
+
+  private func installContentIfNeeded() {
+    guard window.contentView == nil else { return }
+    window.contentView = NSHostingView(
+      rootView: IslandOverlayView(store: store, display: display)
+        .frame(width: Self.windowSize.width, height: Self.windowSize.height, alignment: .top)
+        .preferredColorScheme(.dark)
+    )
+  }
+
+  private func removeMouseTracking() {
+    if let globalMouseMonitor { NSEvent.removeMonitor(globalMouseMonitor) }
+    if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor) }
+    globalMouseMonitor = nil
+    localMouseMonitor = nil
+    initialTrackingTimer?.invalidate()
+    initialTrackingTimer = nil
+    trackingInstalled = false
+  }
+
+  private func removeScreenObserver() {
+    if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+    screenObserver = nil
   }
 
   private func reposition() {
@@ -1539,8 +1565,10 @@ final class DesktopPanelWindowController {
   static let panelSize = CGSize(width: 340, height: 432)
   private static let frameName = "ModelRouterTray.desktopPanel"
   private let window: NSPanel
+  private let store: RouterStore
 
   init(store: RouterStore) {
+    self.store = store
     window = NSPanel(
       contentRect: NSRect(origin: .zero, size: Self.panelSize),
       styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
@@ -1557,16 +1585,13 @@ final class DesktopPanelWindowController {
     window.isMovable = true
     window.isMovableByWindowBackground = true
     window.hidesOnDeactivate = false
-    window.contentView = NSHostingView(
-      rootView: DesktopPanelView(store: store)
-        .frame(width: Self.panelSize.width, height: Self.panelSize.height)
-        .preferredColorScheme(.dark)
-    )
+    window.contentView = nil
     window.setFrameAutosaveName(Self.frameName)
   }
 
   func setVisible(_ visible: Bool) {
     if visible {
+      installContentIfNeeded()
       if !window.setFrameUsingName(Self.frameName), let screen = NSScreen.main {
         let frame = screen.visibleFrame
         window.setFrameOrigin(NSPoint(
@@ -1577,7 +1602,17 @@ final class DesktopPanelWindowController {
       window.orderFrontRegardless()
     } else {
       window.orderOut(nil)
+      window.contentView = nil
     }
+  }
+
+  private func installContentIfNeeded() {
+    guard window.contentView == nil else { return }
+    window.contentView = NSHostingView(
+      rootView: DesktopPanelView(store: store)
+        .frame(width: Self.panelSize.width, height: Self.panelSize.height)
+        .preferredColorScheme(.dark)
+    )
   }
 }
 
