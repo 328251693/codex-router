@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed native OpenAI models disappearing from the Codex picker on Windows when
+  the Codex CLI is installed through npm (#46). `where.exe codex` lists the
+  extensionless POSIX shim before `codex.cmd`, and Node cannot spawn the former
+  without a shell, so every probe threw ENOENT. The router now picks a shim Node
+  can execute and runs `.cmd`/`.bat` through a shell with the path quoted.
+- A Codex binary that cannot be spawned is no longer reported as a signed-out
+  session. That conflation is what let one spawn error silently strip every
+  native model from the catalog; the catalog build now refuses to run rather
+  than guess, and the doctor reports the probe failure on its own line.
+
 - `DASHSCOPE_API_KEY` is documented as a `qwen-plan` credential alongside
   `QWEN_PLAN_API_KEY`, and the README now records that Qwen is key-only:
   Alibaba discontinued the Qwen Code OAuth free tier on 2026-04-15, so there is

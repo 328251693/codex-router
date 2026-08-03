@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { validCallerSecret } from "./caller-auth.mjs";
-import { findCodexBinary } from "./codex-binary.mjs";
+import { codexAuthStatus, findCodexBinary } from "./codex-binary.mjs";
 import { routedCodexAgentStatus } from "./codex-agent-catalog.mjs";
 import { privateFileIsProtected } from "./file-security.mjs";
 import { grokCliPreflight } from "./grok-cli.mjs";
@@ -130,6 +130,18 @@ add(
   "Codex binary",
   codex || "not found",
   "Install Codex or set CODEX_BIN to the Codex CLI binary.",
+);
+// A Codex binary that cannot be spawned reads as "signed out" everywhere it is
+// probed, which silently removes every native model from the picker. Surface it
+// as its own failure instead of letting it masquerade as a logged-out session.
+const codexAuth = codexAuthStatus();
+add(
+  codexAuth.reason === "probe-failed" ? "fail" : "ok",
+  "Codex sign-in probe",
+  codexAuth.reason === "probe-failed"
+    ? `could not run ${codexAuth.binary} (${codexAuth.code || "spawn failed"})`
+    : codexAuth.reason,
+  "Set CODEX_BIN to a Codex CLI Node can spawn; on Windows use the codex.cmd shim, not the extensionless one.",
 );
 add(
   existsSync(CONFIG_PATH) ? "ok" : "fail",
