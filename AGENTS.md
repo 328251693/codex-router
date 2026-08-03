@@ -29,8 +29,7 @@ user.
 3. Never ask the user to paste OAuth tokens or API keys into chat, command
    arguments, logs, environment snippets, or tracked files.
 4. Determine which provider IDs the user requested: `anthropic-api`,
-   `kimi-oauth`, `kimi-api`, `deepseek`, `grok-api`, `qwen-plan`,
-   `zai-coding`, `ollama-cloud`, and/or `minimax-token-plan`. The
+   `kimi-oauth`, `kimi-api`, `deepseek`, `grok-api`, `qwen-plan`, `zai-coding`, `ollama-cloud`, and/or `minimax-token-plan`. The
    catalog-only providers `groq`, `openrouter`, `together`, `fireworks`,
    `cerebras`, `mistral`, `nvidia-nim`, `siliconflow`, `huggingface`, and
    `gemini-api` are also selectable, but they ship no preselected models: after
@@ -76,7 +75,8 @@ user.
 - A user-initiated macOS tray login-mode change may gracefully restart only the
   registered Codex desktop app. This does not authorize an installation task to
   quit Codex, and the tray must never force-terminate it.
-- Do not kill unknown processes on ports 4100-4103.
+- Do not kill unknown processes on ports 4100-4103, or on the Grok OAuth
+  forwarder port 4108.
 - Do not print or read credential-file contents. Status commands report presence
   and source only.
 - Treat the generated `/_codex-router/.../v1` config path as sensitive local

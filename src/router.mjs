@@ -62,6 +62,10 @@ const CALLER_KEY = process.env.CODEX_ROUTER_CALLER_KEY;
 const QUIET =
   process.env.CODEX_ROUTER_QUIET === "1" || process.env.KIMI_PROXY_QUIET === "1";
 const ERROR_STATUS_DURATION_MS = 8_000;
+// No single Codex turn streams for this long. Anything still marked in-flight
+// past this point leaked (crashed client, half-closed socket) and would
+// otherwise inflate the tray activity count until the router restarts.
+const STALE_ACTIVITY_MS = 15 * 60_000;
 const NATIVE_IMAGE_PATHS = new Set([
   "/images/edits",
   "/images/generations",
@@ -79,7 +83,16 @@ let errorStatusUntil = 0;
 if (!INTERNAL_KEY) throw new Error("CODEX_ROUTER_INTERNAL_KEY is required.");
 assertCallerSecret(CALLER_KEY);
 
+function pruneStaleActivity(now = Date.now()) {
+  for (const [requestId, entry] of activeRequests) {
+    if (now - (entry?.startedAt ?? 0) > STALE_ACTIVITY_MS) {
+      activeRequests.delete(requestId);
+    }
+  }
+}
+
 function activityPayload() {
+  pruneStaleActivity();
   const active = [...activeRequests.values()].filter(
     (entry) => entry && typeof entry === "object" && entry.provider,
   );
@@ -104,7 +117,8 @@ function activityPayload() {
 
 function beginRequestActivity() {
   const requestId = ++requestSequence;
-  activeRequests.set(requestId, null);
+  const startedAt = Date.now();
+  activeRequests.set(requestId, { startedAt });
   let finished = false;
   return {
     setRoute({ provider, model, sessionName, ...metadata } = {}) {
@@ -115,7 +129,7 @@ function beginRequestActivity() {
         ...(model ? { model } : {}),
         ...(sessionName ? { sessionName } : {}),
         ...metadata,
-        startedAt: Date.now(),
+        startedAt,
       };
       activeRequests.set(requestId, entry);
       lastUsedProvider = provider;

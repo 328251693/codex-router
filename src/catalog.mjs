@@ -21,6 +21,7 @@ import { syncRoutedCodexAgents } from "./codex-agent-catalog.mjs";
 import { MODEL_BY_SLUG } from "./model-registry.mjs";
 import { buildNativeAliasAssignments } from "./native-alias.mjs";
 import { selectedConfiguredListedModels } from "./provider-selection.mjs";
+import { assertStateOwnership } from "./state-owner.mjs";
 
 const refresh = process.argv.includes("--refresh-native");
 const bundled = process.argv.includes("--bundled-native");
@@ -220,6 +221,10 @@ export function buildLoginFreeCatalog(native, routedModelsList) {
 }
 
 function main() {
+  // The catalog is what Codex offers in its picker. Writing it from a checkout
+  // that does not own this state directory is how the picker ends up
+  // advertising models the running gateway has no route for.
+  assertStateOwnership("write the Codex model catalog");
   const routedModels = selectedConfiguredListedModels();
   const native = nativeCatalog();
   const openaiAuthenticated = codexIsAuthenticated();
@@ -253,5 +258,15 @@ function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
+  try {
+    main();
+  } catch (error) {
+    // Ownership conflicts are an operator mistake with a specific remedy, so
+    // print the guidance rather than a stack trace.
+    if (error?.code === "foreign_state_owner") {
+      console.error(error.message);
+      process.exit(1);
+    }
+    throw error;
+  }
 }

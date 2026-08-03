@@ -9,6 +9,7 @@ let routerYellow = Color(red: 0.94, green: 0.68, blue: 0.25)
 let routerRed = Color(red: 0.91, green: 0.35, blue: 0.32)
 let routerInk = Color(red: 0.035, green: 0.043, blue: 0.055)
 let routerMuted = Color.secondary.opacity(0.72)
+let removalArmWindow: TimeInterval = 4
 
 enum RouterActivityState: String, Decodable {
   case idle
@@ -212,13 +213,24 @@ final class RouterStore: ObservableObject {
     return selectedAccountMetric?.resetDate
   }
 
+  /// Running chats, not in-flight HTTP requests. One chat fans out into many
+  /// requests (turns, subagents, compactions) and counting those reads as a
+  /// runaway number that never matches what the user has open.
+  var activeChatCount: Int {
+    var seen = Set<String>()
+    for request in activeRequests {
+      seen.insert(request.sessionId ?? request.sessionName ?? "request-\(request.id)")
+    }
+    return seen.count
+  }
+
   var hasConcurrentActivity: Bool {
-    activeRequestCount > 1
+    activeChatCount > 1
   }
 
   var activitySummaryLabel: String {
-    if activityState == .generating, activeRequestCount > 1 {
-      return "\(activeRequestCount) active"
+    if activityState == .generating, activeChatCount > 1 {
+      return "\(activeChatCount) chats"
     }
     return activityState.label
   }
@@ -546,6 +558,18 @@ final class RouterStore: ObservableObject {
     ) {
       _ = try await runControl(arguments: ["credential", provider], stdin: secret)
       try await updateProviderSelection(provider, enabled: true)
+    }
+  }
+
+  // The control plane already drops the provider from the Codex selection when
+  // the key file is deleted; this only makes that selection live.
+  func removeProviderKey(_ provider: String) async {
+    await performProviderOperation(
+      provider,
+      successMessage: "API key removed. Restart Codex to refresh its model picker."
+    ) {
+      _ = try await runControl(arguments: ["credential", provider, "--remove"])
+      _ = try? await runControl(arguments: ["apply", "--targets", "codex", "--activate"])
     }
   }
 
@@ -1322,7 +1346,8 @@ private struct TrayView: View {
               },
               onInstall: { Task { await store.installProviderCLI(provider.id) } },
               onLogin: { Task { await store.loginProvider(provider.id) } },
-              onSaveKey: { key in Task { await store.saveProviderKey(provider.id, key: key) } }
+              onSaveKey: { key in Task { await store.saveProviderKey(provider.id, key: key) } },
+              onRemoveKey: { Task { await store.removeProviderKey(provider.id) } }
             )
             if provider.id != providers.last?.id {
               Divider()
@@ -1476,9 +1501,14 @@ private struct ProviderSetupRow: View {
   let onInstall: () -> Void
   let onLogin: () -> Void
   let onSaveKey: (String) -> Void
+  let onRemoveKey: () -> Void
 
   @State private var showingKeyField = false
   @State private var apiKey = ""
+  // A sheet or confirmation dialog resigns key and closes the menu bar popover
+  // before it can be answered, so removal is confirmed by arming the button.
+  @State private var removalArmed = false
+  @State private var armGeneration = 0
 
   var body: some View {
     VStack(alignment: .leading, spacing: 9) {
@@ -1488,15 +1518,15 @@ private struct ProviderSetupRow: View {
             .font(.system(size: 12, weight: .medium))
           Text(detail)
             .font(.system(size: 9, weight: .regular))
-            .foregroundStyle(setup?.configured == true ? routerMuted : routerYellow.opacity(0.9))
+            .foregroundStyle(detailTint)
         }
         Spacer()
         actionControl
       }
 
-      if showingKeyField, setup?.action == "add-key" {
+      if showingKeyField, setup?.kind == "api" {
         VStack(alignment: .leading, spacing: 5) {
-          Text("API key")
+          Text(setup?.configured == true ? "Replacement API key" : "API key")
             .font(.system(size: 9, weight: .medium))
             .foregroundStyle(routerMuted)
           HStack(spacing: 7) {
@@ -1521,15 +1551,23 @@ private struct ProviderSetupRow: View {
     }
     .padding(.vertical, 7)
     .animation(.easeOut(duration: 0.18), value: showingKeyField)
+    .animation(.easeOut(duration: 0.15), value: removalArmed)
     .onChange(of: setup?.configured) { configured in
       if configured == true {
         apiKey = ""
         showingKeyField = false
+        disarmRemoval()
       }
     }
   }
 
+  private var detailTint: Color {
+    if removalArmed { return routerRed }
+    return setup?.configured == true ? routerMuted : routerYellow.opacity(0.9)
+  }
+
   private var detail: String {
+    if removalArmed { return "Click the check again to delete this key" }
     guard let setup else { return "Checking setup…" }
     if oauthNeedsReconnect {
       return "Session expired · reconnect for account usage"
@@ -1573,6 +1611,27 @@ private struct ProviderSetupRow: View {
             .disabled(controlsDisabled)
           }
         }
+        if setup?.kind == "api" {
+          Button(action: { toggleKeyField() }) {
+            Image(systemName: showingKeyField ? "xmark" : "pencil")
+              .font(.system(size: 10, weight: .semibold))
+              .frame(width: 20, height: 20)
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(routerAccent)
+          .help(showingKeyField ? "Cancel key replacement" : "Replace API key")
+          .disabled(controlsDisabled)
+
+          Button(action: { tapRemove() }) {
+            Image(systemName: removalArmed ? "checkmark.circle.fill" : "trash")
+              .font(.system(size: removalArmed ? 12 : 10, weight: .semibold))
+              .frame(width: 20, height: 20)
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(removalArmed ? routerRed : routerYellow)
+          .help(removalArmed ? "Click again to delete the stored key" : "Remove stored API key")
+          .disabled(controlsDisabled)
+        }
         Toggle("", isOn: Binding(get: { provider.enabled }, set: onToggle))
           .labelsHidden()
           .toggleStyle(.switch)
@@ -1607,11 +1666,38 @@ private struct ProviderSetupRow: View {
     switch setup?.action {
     case "install": onInstall()
     case "login": onLogin()
-    case "add-key":
-      apiKey = ""
-      showingKeyField.toggle()
+    case "add-key": toggleKeyField()
     default: break
     }
+  }
+
+  private func toggleKeyField() {
+    apiKey = ""
+    disarmRemoval()
+    showingKeyField.toggle()
+  }
+
+  // First click arms, second click deletes. The armed state expires on its own
+  // so a stray click never leaves a live delete button sitting in the row.
+  private func tapRemove() {
+    if removalArmed {
+      disarmRemoval()
+      apiKey = ""
+      showingKeyField = false
+      onRemoveKey()
+      return
+    }
+    removalArmed = true
+    armGeneration += 1
+    let generation = armGeneration
+    DispatchQueue.main.asyncAfter(deadline: .now() + removalArmWindow) {
+      if generation == armGeneration { removalArmed = false }
+    }
+  }
+
+  private func disarmRemoval() {
+    armGeneration += 1
+    removalArmed = false
   }
 }
 
