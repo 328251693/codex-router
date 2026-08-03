@@ -8,6 +8,12 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+// The guard canonicalizes every root it compares, so the recorded owner comes
+// back in the platform's own form (a drive-qualified, backslash path on
+// Windows). Resolve the fixture the same way instead of asserting POSIX
+// separators that only ever match on macOS and Linux.
+const FOREIGN_OWNER = path.resolve("/somewhere/else/codex-router");
+
 // A state directory records the checkout that installed it. Regenerating the
 // catalog or gateway config from a different checkout desynchronizes what Codex
 // offers from what the gateway can route, which surfaces to the user as an
@@ -62,15 +68,15 @@ test("state owned by this checkout is not foreign", () => {
 });
 
 test("state owned by another checkout is reported as foreign", () => {
-  withState({ owner: "/somewhere/else/codex-router" }, (stateDir) => {
+  withState({ owner: FOREIGN_OWNER }, (stateDir) => {
     const status = ownershipStatus(stateDir);
     assert.equal(status.foreign, true);
-    assert.equal(status.owner, "/somewhere/else/codex-router");
+    assert.equal(status.owner, FOREIGN_OWNER);
   });
 });
 
 test("the documented override clears the conflict", () => {
-  withState({ owner: "/somewhere/else/codex-router" }, (stateDir) => {
+  withState({ owner: FOREIGN_OWNER }, (stateDir) => {
     const status = ownershipStatus(stateDir, { MODEL_ROUTER_ALLOW_FOREIGN_STATE: "1" });
     assert.equal(status.foreign, true);
     assert.equal(status.overridden, true);
@@ -78,7 +84,7 @@ test("the documented override clears the conflict", () => {
 });
 
 test("writing the catalog from a foreign checkout fails with guidance, not a stack trace", () => {
-  withState({ owner: "/somewhere/else/codex-router" }, (stateDir) => {
+  withState({ owner: FOREIGN_OWNER }, (stateDir) => {
     const result = spawnSync(process.execPath, [path.join(root, "src", "catalog.mjs")], {
       cwd: root,
       encoding: "utf8",
@@ -86,13 +92,13 @@ test("writing the catalog from a foreign checkout fails with guidance, not a sta
     });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /owned by another checkout/);
-    assert.match(result.stderr, /somewhere\/else\/codex-router/);
+    assert.ok(result.stderr.includes(FOREIGN_OWNER), result.stderr);
     assert.doesNotMatch(result.stderr, /at assertStateOwnership/);
   });
 });
 
 test("writing the gateway config from a foreign checkout is refused", () => {
-  withState({ owner: "/somewhere/else/codex-router" }, (stateDir) => {
+  withState({ owner: FOREIGN_OWNER }, (stateDir) => {
     const result = spawnSync(
       process.execPath,
       [
@@ -113,7 +119,7 @@ test("writing the gateway config from a foreign checkout is refused", () => {
 });
 
 test("rendering the gateway config to an explicit path stays unguarded", () => {
-  withState({ owner: "/somewhere/else/codex-router" }, (stateDir) => {
+  withState({ owner: FOREIGN_OWNER }, (stateDir) => {
     const target = path.join(stateDir, "scratch-litellm.yaml");
     const result = spawnSync(
       process.execPath,
@@ -135,7 +141,7 @@ test("rendering the gateway config to an explicit path stays unguarded", () => {
 });
 
 test("the installer is allowed to take ownership", () => {
-  withState({ owner: "/somewhere/else/codex-router" }, (stateDir) => {
+  withState({ owner: FOREIGN_OWNER }, (stateDir) => {
     // bin/install exports the override for its whole run because it rebuilds
     // generated state before recording the new owner.
     const result = spawnSync(process.execPath, [path.join(root, "src", "catalog.mjs")], {

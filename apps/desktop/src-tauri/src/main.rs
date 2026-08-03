@@ -294,7 +294,11 @@ async fn remove_api_key(state: State<'_, RouterState>, provider: String) -> Resu
     let router = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let removal = run_control_json(&router, &["credential", &provider, "--remove"], None)?;
-        let _ = run_control(&router, &["apply", "--targets", "codex", "--activate"], None);
+        let _ = run_control(
+            &router,
+            &["apply", "--targets", "codex", "--activate"],
+            None,
+        );
         Ok(removal)
     })
     .await
