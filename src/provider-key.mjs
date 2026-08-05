@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { closeSync, openSync, readSync, writeSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, writeSync } from "node:fs";
+import path from "node:path";
 
 import {
   apiProvider,
@@ -25,6 +26,25 @@ if (!providerId || !new Set(["status", "set", "remove"]).has(command)) {
 
 const provider = apiProvider(providerId);
 
+function windowsPowerShellExecutables() {
+  const candidates = [
+    process.env.SystemRoot
+      ? path.join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+      : undefined,
+    "powershell.exe",
+    "pwsh.exe",
+  ].filter(Boolean);
+  return [...new Set(candidates)].filter((executable) => {
+    if (path.isAbsolute(executable)) return existsSync(executable);
+    try {
+      execFileSync("where.exe", [executable], { stdio: "ignore" });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 function hiddenPrompt(label) {
   if (process.platform === "win32") {
     const script = [
@@ -34,7 +54,7 @@ function hiddenPrompt(label) {
       "finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }",
     ].join("; ");
     let lastError;
-    for (const executable of ["powershell.exe", "pwsh.exe"]) {
+    for (const executable of windowsPowerShellExecutables()) {
       try {
         return execFileSync(
           executable,
@@ -119,7 +139,7 @@ function visiblePrompt(label) {
   if (process.platform === "win32") {
     const script = "[Console]::Out.Write((Read-Host $env:CODEX_ROUTER_PROMPT_LABEL))";
     let lastError;
-    for (const executable of ["powershell.exe", "pwsh.exe"]) {
+    for (const executable of windowsPowerShellExecutables()) {
       try {
         return execFileSync(
           executable,
