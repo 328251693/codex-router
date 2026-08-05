@@ -52,7 +52,7 @@ function hiddenPrompt(label) {
       "$pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)",
       "try { [Console]::Out.Write([Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)) }",
       "finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }",
-    ].join("; ");
+    ].join("\n");
     let lastError;
     for (const executable of windowsPowerShellExecutables()) {
       try {
