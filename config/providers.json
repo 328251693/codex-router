@@ -369,6 +369,25 @@
         ],
         "prompt": "Google Gemini API key"
       }
+    },
+    {
+      "id": "new-api",
+      "displayName": "new-api 中转站",
+      "kind": "openai-compatible",
+      "ownedBy": "new-api",
+      "baseUrl": "https://aiapi.shenguyun.com/v1",
+      "baseUrlEnv": "NEW_API_BASE_URL",
+      "credential": {
+        "environment": [
+          "NEW_API_API_KEY"
+        ],
+        "file": "new-api-api-key.secret",
+        "legacyFiles": [],
+        "keychainServices": [
+          "codex-router-new-api"
+        ],
+        "prompt": "new-api API key"
+      }
     }
   ],
   "models": [

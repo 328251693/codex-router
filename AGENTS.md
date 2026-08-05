@@ -32,7 +32,7 @@ user.
    `kimi-oauth`, `kimi-api`, `deepseek`, `grok-api`, `qwen-plan`, `zai-coding`, `ollama-cloud`, and/or `minimax-token-plan`. The
    catalog-only providers `groq`, `openrouter`, `together`, `fireworks`,
    `cerebras`, `mistral`, `nvidia-nim`, `siliconflow`, `huggingface`, and
-   `gemini-api` are also selectable, but they ship no preselected models: after
+   `gemini-api`, and `new-api` are also selectable, but they ship no preselected models: after
    the key is stored, the user must run `bin/curate-models PROVIDER` in an
    interactive terminal to choose models. If they did not specify and
    credentials already exist, use

@@ -53,6 +53,8 @@ test("provider registry exposes configured API and OAuth model families", () => 
   assert.equal(PROVIDERS.get("minimax-token-plan").baseUrl, "https://api.minimax.io/v1");
   assert.equal(PROVIDERS.get("grok-api").baseUrl, "https://api.x.ai/v1");
   assert.equal(PROVIDERS.get("grok-oauth").proxyBaseEnv, "GROK_OAUTH_FORWARD_BASE_URL");
+  assert.equal(PROVIDERS.get("new-api").baseUrl, "https://aiapi.shenguyun.com/v1");
+  assert.equal(PROVIDERS.get("new-api").ownedBy, "new-api");
   // Qwen OAuth was discontinued upstream on 2026-04-15, so the plan key is the
   // only Qwen surface. A second key-based provider would differ only by base
   // URL, which QWEN_PLAN_BASE_URL already covers.

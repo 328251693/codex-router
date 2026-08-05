@@ -162,12 +162,21 @@ often for the repository to pin and live-verify individual entries:
 | SiliconFlow | `siliconflow` | `https://api.siliconflow.cn/v1` |
 | Hugging Face Router | `huggingface` | `https://router.huggingface.co/v1` |
 | Google Gemini API | `gemini-api` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| new-api 中转站 | `new-api` | `https://aiapi.shenguyun.com/v1` |
 
 Add a key, then pick the models you want from the provider's live catalog:
 
 ```sh
 ./bin/model-router codex provider-key groq set
 ./bin/curate-models groq
+```
+
+For a new-api-compatible relay, store its key and discover models from its
+OpenAI-compatible catalog:
+
+```sh
+./bin/model-router codex provider-key new-api set
+./bin/curate-models new-api
 ```
 
 Curated entries carry conservative default metadata and are local to your
