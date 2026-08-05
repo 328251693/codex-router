@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { validCallerSecret } from "./caller-auth.mjs";
-import { codexAuthStatus, findCodexBinary } from "./codex-binary.mjs";
+import { codexAuthStatus, codexSpawnTarget, findCodexBinary } from "./codex-binary.mjs";
 import { routedCodexAgentStatus } from "./codex-agent-catalog.mjs";
 import { privateFileIsProtected } from "./file-security.mjs";
 import { grokCliPreflight } from "./grok-cli.mjs";
@@ -400,8 +400,10 @@ add(
 
 if (codex && catalogOk) {
   try {
+    const { command, options } = codexSpawnTarget(codex);
     const parsed = JSON.parse(
-      execFileSync(codex, ["debug", "models"], {
+      execFileSync(command, ["debug", "models"], {
+        ...options,
         encoding: "utf8",
         timeout: 30_000,
         maxBuffer: 32 * 1024 * 1024,
